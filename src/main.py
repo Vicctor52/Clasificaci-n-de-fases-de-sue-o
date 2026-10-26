@@ -1,4 +1,4 @@
-from config import CHANNELS_TO_DROP
+from config import ARTIFACT_THRESHOLD, CHANNELS_TO_DROP
 from utils import process_patient
 
 
@@ -12,7 +12,11 @@ def main():
     for patient_id in range(1, 11):
         print(f"Processing patient {patient_id}...")
         features, labels_1, labels_2 = process_patient(
-            patient_id, CHANNELS_TO_DROP
+            patient_id,
+            CHANNELS_TO_DROP,
+            remove_artifacts=True,
+            artifact_threshold=ARTIFACT_THRESHOLD,
+            show_plot=False,
         )
         data_list.append(
             {
