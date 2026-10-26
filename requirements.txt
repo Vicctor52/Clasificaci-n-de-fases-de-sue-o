@@ -1,0 +1,5 @@
+matplotlib
+mne
+numpy
+pandas
+yasa
