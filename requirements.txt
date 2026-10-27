@@ -2,4 +2,6 @@ matplotlib
 mne
 numpy
 pandas
+scikit-learn
+xgboost
 yasa
