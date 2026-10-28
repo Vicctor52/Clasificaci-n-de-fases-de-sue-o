@@ -11,7 +11,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from model_utils import plot_confusion_matrix, plot_roc
+from plots import plot_confusion_matrix, plot_roc
 
 
 class PlotRocTests(unittest.TestCase):
