@@ -1,5 +1,10 @@
 from config import ARTIFACT_THRESHOLD, CHANNELS_TO_DROP, train_patients
-from model_utils import data_preparation, xgb_definition, xgb_fitting
+from model_utils import (
+    data_preparation,
+    xgb_definition,
+    xgb_evaluation,
+    xgb_fitting,
+)
 from utils import process_patient
 
 
@@ -40,6 +45,8 @@ def main():
     calibrated_model = xgb_fitting(X_train, y_train, grid_search)
     multiclass_predictions = calibrated_model.predict(X_test)
     print(f"Predicted multiclass labels: {len(multiclass_predictions)}")
+
+    xgb_evaluation(calibrated_model, X_test, y_test)
 
 
 if __name__ == "__main__":
