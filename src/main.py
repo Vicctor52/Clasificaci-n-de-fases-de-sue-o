@@ -1,5 +1,9 @@
 from config import ARTIFACT_THRESHOLD, CHANNELS_TO_DROP, train_patients
 from model_utils import (
+    binary_data_preparation,
+    binary_xgb_definition,
+    binary_xgb_evaluation,
+    binary_xgb_fitting,
     data_preparation,
     xgb_definition,
     xgb_evaluation,
@@ -9,11 +13,11 @@ from utils import process_patient
 
 
 def main():
-    """Preprocess the recordings and train the multiclass model.
+    """Preprocess the recordings and train both classification models.
 
     Patient recordings are preprocessed first, then split by patient ID into
-    training and test sets. The four-class model is fitted on the consensus
-    labels and used to predict the test epochs.
+    training and test sets. The multiclass and binary models are fitted on the
+    consensus labels and evaluated on the test epochs.
     """
     data_list = []
     for patient_id in range(1, 11):
@@ -47,6 +51,26 @@ def main():
     print(f"Predicted multiclass labels: {len(multiclass_predictions)}")
 
     xgb_evaluation(calibrated_model, X_test, y_test)
+
+    # Train a second model to distinguish N1 from N2 within the light-sleep class.
+    X_train_bin, y_train_bin, X_test_bin, y_test_bin = binary_data_preparation(
+        X_train, X_test, y_train_original, y_test_original
+    )
+    grid_search_bin = binary_xgb_definition()
+    calibrated_model_bin = binary_xgb_fitting(
+        grid_search_bin, X_train_bin, y_train_bin
+    )
+    binary_probabilities = calibrated_model_bin.predict_proba(X_test_bin)
+    binary_threshold = 0.5
+
+    binary_predictions = (binary_probabilities[:, 1] > binary_threshold).astype(int)
+
+    binary_xgb_evaluation(
+        calibrated_model_bin,
+        X_test_bin,
+        y_test_bin,
+        threshold=binary_threshold,
+    )
 
 
 if __name__ == "__main__":
