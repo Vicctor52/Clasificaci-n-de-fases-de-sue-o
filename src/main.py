@@ -1,10 +1,16 @@
-from config import ARTIFACT_THRESHOLD, CHANNELS_TO_DROP, train_patients
+from config import (
+    ARTIFACT_THRESHOLD,
+    CHANNELS_TO_DROP,
+    CONFIDENCE_THRESHOLD,
+    train_patients,
+)
 from model_utils import (
     binary_data_preparation,
     binary_xgb_definition,
     binary_xgb_evaluation,
     binary_xgb_fitting,
     data_preparation,
+    get_confidence_mask,
     model_combination,
     xgb_definition,
     xgb_evaluation,
@@ -73,12 +79,18 @@ def main():
         threshold=binary_threshold,
     )
 
-    combined_predictions, combined_probabilities = model_combination(
+    combined_predictions, combined_probabilities, _ = model_combination(
         X_test,
         calibrated_model,
         calibrated_model_bin,
     )
-    print(f"Combined predictions: {len(combined_predictions)}")
+    confidence_mask = get_confidence_mask(
+        combined_probabilities, threshold=CONFIDENCE_THRESHOLD
+    )
+    print(
+        "Predictions retained by confidence threshold: "
+        f"{confidence_mask.sum()} / {len(confidence_mask)}"
+    )
 
 
 if __name__ == "__main__":

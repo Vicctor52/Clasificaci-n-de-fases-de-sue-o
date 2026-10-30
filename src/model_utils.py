@@ -7,6 +7,7 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from config import (
     BINARY_CLASS_LABELS,
     BINARY_CLASS_NAMES,
+    CONFIDENCE_THRESHOLD,
     MULTICLASS_CLASS_LABELS,
     MULTICLASS_CLASS_NAMES,
 )
@@ -275,17 +276,49 @@ def binary_xgb_evaluation(
     print(f"\nOverall binary AUC: {class_aucs[class_names[1]]:.4f}")
 
 
+#Confidence filter
+
+def get_confidence_mask(probabilities, threshold=CONFIDENCE_THRESHOLD):
+    """Mark probability rows whose confidence score exceeds a threshold.
+
+    Args:
+        probabilities: Two-dimensional array of class probabilities, one row per sample.
+        threshold: Minimum confidence score required to mark a row as confident.
+
+    Returns:
+        Boolean mask indicating which probability rows exceed the threshold.
+    """
+
+    max_probability = np.max(probabilities, axis=1)
+
+    # sorted_probabilities = np.sort(probabilities, axis=1)
+    # margin = sorted_probabilities[:, -1] - sorted_probabilities[:, -2]
+
+    # epsilon = 1e-12
+    # entropy = -np.sum(probabilities * np.log(probabilities + epsilon), axis=1)
+    # entropy_norm = entropy / np.log(5)
+
+    confidence_score = max_probability
+
+    return confidence_score > threshold
+
+
+
 #Model combination
-def model_combination(X_test, calibrated_model, calibrated_model_bin):
-    """Combine model probabilities to classify the five sleep stages.
+def model_combination(X_test, calibrated_model, calibrated_model_bin, confidence_threshold=None):
+    """Combine model probabilities and optionally filter low-confidence predictions.
 
     Args:
         X_test: Feature table to classify.
         calibrated_model: Calibrated model distinguishing Wake, N1/N2, N3, and REM.
         calibrated_model_bin: Calibrated model distinguishing N1 from N2.
+        confidence_threshold: Optional minimum confidence score. If provided,
+            predictions below it are excluded from the returned predictions and
+            probabilities.
 
     Returns:
-        A tuple containing the predicted class indices and their probability rows.
+        A tuple containing retained predicted class indices, their probability
+        rows, and a boolean mask aligned with the original X_test rows.
     """
     prob_matrix = np.zeros((len(X_test), 5))
     proba_lvl1 = calibrated_model.predict_proba(X_test)
@@ -298,5 +331,9 @@ def model_combination(X_test, calibrated_model, calibrated_model_bin):
         prob_matrix[row_index, 3] = p_n3
         prob_matrix[row_index, 4] = p_rem
 
+    confidence_mask = np.ones(len(X_test), dtype=bool)
+    if confidence_threshold is not None:
+        confidence_mask = get_confidence_mask(prob_matrix, threshold=confidence_threshold)
+
     final_predictions = np.argmax(prob_matrix, axis=1)
-    return final_predictions, prob_matrix
+    return final_predictions[confidence_mask], prob_matrix[confidence_mask], confidence_mask
