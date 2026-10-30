@@ -12,7 +12,26 @@ from model_utils import (
     binary_data_preparation,
     binary_xgb_evaluation,
     data_preparation,
+    get_confidence_mask,
+    model_combination,
 )
+
+
+class _MockMulticlassModel:
+    def __init__(self, probabilities):
+        self.probabilities = np.asarray(probabilities)
+
+    def predict_proba(self, X):
+        return self.probabilities
+
+
+class _MockBinaryModel:
+    def __init__(self, probabilities_by_row):
+        self.probabilities_by_row = probabilities_by_row
+
+    def predict_proba(self, X):
+        row_position = X.index[0]
+        return np.asarray([self.probabilities_by_row[row_position]])
 
 
 class DataPreparationTests(unittest.TestCase):
@@ -146,6 +165,70 @@ class BinaryEvaluationTests(unittest.TestCase):
         np.testing.assert_array_equal(roc_args[0], y_test_bin)
         np.testing.assert_allclose(roc_args[1], probabilities[:, 1])
         self.assertEqual(roc_kwargs["labels"], [0, 1])
+
+
+class ModelCombinationTests(unittest.TestCase):
+    def setUp(self):
+        self.X_test = pd.DataFrame({"feature": [1.0, 2.0]})
+        self.multiclass_model = _MockMulticlassModel(
+            [
+                [0.9, 0.02, 0.04, 0.04],
+                [0.05, 0.6, 0.1, 0.25],
+            ]
+        )
+        self.binary_model = _MockBinaryModel(
+            {
+                0: [0.9, 0.1],
+                1: [0.2, 0.8],
+            }
+        )
+
+    def test_combines_the_binary_light_sleep_split_with_multiclass_probabilities(
+        self,
+    ):
+        predictions, probabilities, mask = model_combination(
+            self.X_test,
+            self.multiclass_model,
+            self.binary_model,
+        )
+
+        np.testing.assert_array_equal(predictions, [0, 2])
+        np.testing.assert_allclose(
+            probabilities,
+            [
+                [0.9, 0.018, 0.002, 0.04, 0.04],
+                [0.05, 0.12, 0.48, 0.1, 0.25],
+            ],
+        )
+        np.testing.assert_array_equal(mask, [True, True])
+
+    def test_filters_rows_below_the_confidence_threshold(self):
+        predictions, probabilities, mask = model_combination(
+            self.X_test,
+            self.multiclass_model,
+            self.binary_model,
+            confidence_threshold=0.8,
+        )
+
+        np.testing.assert_array_equal(mask, [True, False])
+        np.testing.assert_array_equal(predictions, [0])
+        np.testing.assert_allclose(
+            probabilities,
+            [[0.9, 0.018, 0.002, 0.04, 0.04]],
+        )
+
+    def test_confidence_mask_uses_the_maximum_class_probability(self):
+        probabilities = np.array(
+            [
+                [0.75, 0.25],
+                [0.2, 0.8],
+                [0.5, 0.5],
+            ]
+        )
+
+        mask = get_confidence_mask(probabilities, threshold=0.75)
+
+        np.testing.assert_array_equal(mask, [False, True, False])
 
 
 if __name__ == "__main__":
