@@ -8,9 +8,44 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import utils
-from config import ARTIFACT_THRESHOLD, CHANNELS_TO_DROP
+from config import ARTIFACT_THRESHOLD, CHANNELS_TO_DROP, CONFIDENCE_THRESHOLD
+from model_utils import get_confidence_mask
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+
+CONFIDENCE_RESULTS = {
+    0.8: {
+        "coverage": 0.7406849830636055,
+        "macro_f1": 0.9004519162690123,
+        "accuracy": 0.9115853658536586,
+        "auc": 0.9800052831546846,
+    },
+    0.85: {
+        "coverage": 0.6872412495295446,
+        "macro_f1": 0.9152428872982282,
+        "accuracy": 0.9282584884994524,
+        "auc": 0.980767692155314,
+    },
+    0.9: {
+        "coverage": 0.6164847572450132,
+        "macro_f1": 0.9240990244198933,
+        "accuracy": 0.9438339438339438,
+        "auc": 0.9812349579165447,
+    },
+    0.95: {
+        "coverage": 0.502822732404968,
+        "macro_f1": 0.9351303966512964,
+        "accuracy": 0.9610778443113772,
+        "auc": 0.9822363951643471,
+    },
+}
+
+UNFILTERED_RESULTS = {
+    "coverage": 1.0,
+    "macro_f1": 0.8255179774164318,
+    "accuracy": 0.8231087692886714,
+    "auc": 0.9658341664634387,
+}
 
 
 class ArtifactThresholdTests(unittest.TestCase):
@@ -79,6 +114,52 @@ class ArtifactThresholdTests(unittest.TestCase):
         rejection_rate = rejected_epochs / evaluated_epochs
         self.assertGreaterEqual(rejection_rate, 0.005)
         self.assertLessEqual(rejection_rate, 0.02)
+
+
+class ConfidenceThresholdTests(unittest.TestCase):
+    def test_configured_threshold_is_one_of_the_evaluated_candidates(self):
+        self.assertIn(CONFIDENCE_THRESHOLD, CONFIDENCE_RESULTS)
+
+    def test_selected_threshold_maximizes_macro_f1_with_minimum_coverage(self):
+        eligible = {
+            threshold: result
+            for threshold, result in CONFIDENCE_RESULTS.items()
+            if result["coverage"] >= 0.5
+        }
+        selected = max(
+            eligible, key=lambda threshold: eligible[threshold]["macro_f1"]
+        )
+
+        self.assertEqual(CONFIDENCE_THRESHOLD, selected)
+        self.assertGreaterEqual(
+            CONFIDENCE_RESULTS[CONFIDENCE_THRESHOLD]["coverage"], 0.5
+        )
+
+    def test_filtered_macro_f1_improves_over_the_unfiltered_model(self):
+        self.assertGreater(
+            CONFIDENCE_RESULTS[CONFIDENCE_THRESHOLD]["macro_f1"],
+            UNFILTERED_RESULTS["macro_f1"],
+        )
+
+    def test_higher_thresholds_reduce_coverage(self):
+        coverages = [
+            CONFIDENCE_RESULTS[threshold]["coverage"]
+            for threshold in sorted(CONFIDENCE_RESULTS)
+        ]
+        self.assertEqual(coverages, sorted(coverages, reverse=True))
+
+    def test_mask_is_strict_at_the_threshold_boundary(self):
+        probabilities = np.array(
+            [
+                [0.95, 0.05],
+                [0.9500001, 0.0499999],
+                [0.9499999, 0.0500001],
+            ]
+        )
+
+        mask = get_confidence_mask(probabilities, threshold=0.95)
+
+        np.testing.assert_array_equal(mask, [False, True, False])
 
 
 if __name__ == "__main__":
