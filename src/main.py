@@ -5,6 +5,7 @@ from model_utils import (
     binary_xgb_evaluation,
     binary_xgb_fitting,
     data_preparation,
+    model_combination,
     xgb_definition,
     xgb_evaluation,
     xgb_fitting,
@@ -71,6 +72,13 @@ def main():
         y_test_bin,
         threshold=binary_threshold,
     )
+
+    combined_predictions, combined_probabilities = model_combination(
+        X_test,
+        calibrated_model,
+        calibrated_model_bin,
+    )
+    print(f"Combined predictions: {len(combined_predictions)}")
 
 
 if __name__ == "__main__":

@@ -273,3 +273,30 @@ def binary_xgb_evaluation(
         title="Curva ROC - Modelo binario",
     )
     print(f"\nOverall binary AUC: {class_aucs[class_names[1]]:.4f}")
+
+
+#Model combination
+def model_combination(X_test, calibrated_model, calibrated_model_bin):
+    """Combine model probabilities to classify the five sleep stages.
+
+    Args:
+        X_test: Feature table to classify.
+        calibrated_model: Calibrated model distinguishing Wake, N1/N2, N3, and REM.
+        calibrated_model_bin: Calibrated model distinguishing N1 from N2.
+
+    Returns:
+        A tuple containing the predicted class indices and their probability rows.
+    """
+    prob_matrix = np.zeros((len(X_test), 5))
+    proba_lvl1 = calibrated_model.predict_proba(X_test)
+
+    for row_index, (p_wake, p_light, p_n3, p_rem) in enumerate(proba_lvl1):
+        prob_matrix[row_index, 0] = p_wake
+        binary_probabilities = calibrated_model_bin.predict_proba(X_test.iloc[[row_index]])[0]
+        prob_matrix[row_index, 1] = binary_probabilities[0] * p_light
+        prob_matrix[row_index, 2] = binary_probabilities[1] * p_light
+        prob_matrix[row_index, 3] = p_n3
+        prob_matrix[row_index, 4] = p_rem
+
+    final_predictions = np.argmax(prob_matrix, axis=1)
+    return final_predictions, prob_matrix
