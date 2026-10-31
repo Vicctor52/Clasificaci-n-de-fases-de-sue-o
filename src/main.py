@@ -17,6 +17,7 @@ from model_utils import (
     xgb_fitting,
 )
 from utils import process_patient
+from report import generate_report
 
 
 def main():
@@ -90,6 +91,31 @@ def main():
     print(
         "Predictions retained by confidence threshold: "
         f"{confidence_mask.sum()} / {len(confidence_mask)}"
+    )
+
+    generate_report(
+        y_true_multiclass=y_test,
+        y_pred_multiclass=multiclass_predictions,
+        probabilities_multiclass=multiclass_probabilities,
+        y_true_binary=y_test_bin,
+        y_pred_binary=binary_predictions,
+        probabilities_binary=binary_probabilities[:, 1],
+        y_true_combined=y_test_original,
+        y_pred_combined=combined_predictions,
+        probabilities_combined=combined_probabilities,
+        confidence_mask=confidence_mask,
+        confidence_threshold=CONFIDENCE_THRESHOLD,
+        artifact_threshold=ARTIFACT_THRESHOLD,
+        train_patient_ids=[
+            patient["id"]
+            for patient in data_list
+            if patient["id"] <= train_patients
+        ],
+        test_patient_ids=[
+            patient["id"]
+            for patient in data_list
+            if patient["id"] > train_patients
+        ],
     )
 
 
