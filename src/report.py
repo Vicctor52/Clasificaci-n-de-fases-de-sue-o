@@ -10,6 +10,76 @@ from sklearn.metrics import accuracy_score, auc, f1_score, precision_recall_fsco
 from plots import plot_confusion_matrix, plot_roc
 
 
+def _calculate_auc(y_true, probabilities, labels):
+    """Calculate macro one-vs-rest AUC, or the positive-class AUC for binary data."""
+    y_true = np.asarray(y_true)
+    probabilities = np.asarray(probabilities)
+    labels = np.asarray(labels)
+
+    class_indices = [1] if len(labels) == 2 else range(len(labels))
+    class_aucs = []
+    for class_index in class_indices:
+        binary_labels = (y_true == labels[class_index]).astype(int)
+        if np.unique(binary_labels).size < 2:
+            continue
+        scores = (
+            probabilities
+            if probabilities.ndim == 1
+            else probabilities[:, class_index]
+        )
+        false_positive_rate, true_positive_rate, _ = roc_curve(
+            binary_labels, scores
+        )
+        class_aucs.append(auc(false_positive_rate, true_positive_rate))
+
+    return float(np.mean(class_aucs)) if class_aucs else None
+
+
+def _metrics_html(y_true, y_pred, probabilities, labels, class_names):
+    """Build summary and per-class metric tables."""
+    if not len(y_true):
+        return "<p>No hay muestras para calcular las métricas.</p>"
+
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true, y_pred, labels=labels, zero_division=0
+    )
+    macro_f1 = f1_score(
+        y_true, y_pred, labels=labels, average="macro", zero_division=0
+    )
+    auc_score = _calculate_auc(y_true, probabilities, labels)
+    auc_text = f"{auc_score:.3f}" if auc_score is not None else "No disponible"
+
+    class_rows = "".join(
+        f"<tr><td>{name}</td><td>{p:.3f}</td><td>{r:.3f}</td>"
+        f"<td>{score:.3f}</td><td>{int(count)}</td></tr>"
+        for name, p, r, score, count in zip(
+            class_names, precision, recall, f1, support
+        )
+    )
+    return f"""
+    <table>
+      <thead><tr><th>Muestras</th><th>Exactitud</th><th>Macro-F1</th><th>AUC</th></tr></thead>
+      <tbody><tr><td>{len(y_true)}</td><td>{accuracy_score(y_true, y_pred):.3f}</td>
+      <td>{macro_f1:.3f}</td><td>{auc_text}</td></tr></tbody>
+    </table>
+    <table>
+      <thead><tr><th>Clase</th><th>Precisión</th><th>Recall</th><th>F1</th><th>Ejemplos</th></tr></thead>
+      <tbody>{class_rows}</tbody>
+    </table>
+    """
+
+
+def _plot_image(plot_function, *args, **kwargs):
+    """Render a plot to an HTML-ready PNG image."""
+    with patch("matplotlib.pyplot.show"):
+        plot_function(*args, **kwargs)
+    figure = plt.gcf()
+    image = BytesIO()
+    figure.savefig(image, format="png", bbox_inches="tight")
+    plt.close(figure)
+    return base64.b64encode(image.getvalue()).decode("ascii")
+
+
 def generate_report(
     y_true_multiclass,
     y_pred_multiclass,
@@ -106,85 +176,29 @@ def generate_report(
             selected_pred = selected_pred[sample_mask]
             selected_probabilities = selected_probabilities[sample_mask]
 
+        metrics_content = _metrics_html(
+            selected_true,
+            selected_pred,
+            selected_probabilities,
+            labels,
+            class_names,
+        )
+
         if selected_true.size:
-            precision, recall, f1, support = precision_recall_fscore_support(
-                selected_true,
-                selected_pred,
-                labels=labels,
-                zero_division=0,
-            )
-            macro_f1 = f1_score(
-                selected_true,
-                selected_pred,
-                labels=labels,
-                average="macro",
-                zero_division=0,
-            )
-
-            class_indices = [1] if len(labels) == 2 else range(len(labels))
-            class_aucs = []
-            for class_index in class_indices:
-                binary_labels = (
-                    selected_true == labels[class_index]
-                ).astype(int)
-                if np.unique(binary_labels).size < 2:
-                    continue
-                scores = (
-                    selected_probabilities
-                    if selected_probabilities.ndim == 1
-                    else selected_probabilities[:, class_index]
-                )
-                false_positive_rate, true_positive_rate, _ = roc_curve(
-                    binary_labels, scores
-                )
-                class_aucs.append(
-                    auc(false_positive_rate, true_positive_rate)
-                )
-            auc_score = float(np.mean(class_aucs)) if class_aucs else None
-            auc_text = (
-                f"{auc_score:.3f}" if auc_score is not None else "No disponible"
-            )
-
-            class_rows = "".join(
-                f"<tr><td>{class_name}</td><td>{class_precision:.3f}</td>"
-                f"<td>{class_recall:.3f}</td><td>{class_f1:.3f}</td>"
-                f"<td>{int(class_support)}</td></tr>"
-                for class_name, class_precision, class_recall, class_f1, class_support in zip(
-                    class_names, precision, recall, f1, support
-                )
-            )
-            metrics_content = f"""
-            <table>
-              <thead><tr><th>Muestras</th><th>Exactitud</th><th>Macro-F1</th><th>AUC</th></tr></thead>
-              <tbody><tr><td>{len(selected_true)}</td>
-              <td>{accuracy_score(selected_true, selected_pred):.3f}</td>
-              <td>{macro_f1:.3f}</td><td>{auc_text}</td></tr></tbody>
-            </table>
-            <table>
-              <thead><tr><th>Clase</th><th>Precisión</th><th>Recall</th><th>F1</th><th>Ejemplos</th></tr></thead>
-              <tbody>{class_rows}</tbody>
-            </table>
-            """
-
             has_roc_data = any(
                 np.unique(selected_true == label).size == 2 for label in labels
             )
             if has_roc_data:
-                with patch("matplotlib.pyplot.show"):
-                    plot_roc(
-                        selected_true,
-                        selected_probabilities,
-                        labels=labels,
-                        class_names=class_names,
-                        title=f"Curva ROC - {name}",
-                    )
-                roc_figure = plt.gcf()
-                roc_image = BytesIO()
-                roc_figure.savefig(roc_image, format="png", bbox_inches="tight")
-                plt.close(roc_figure)
-                roc_base64 = base64.b64encode(roc_image.getvalue()).decode("ascii")
+                roc_image = _plot_image(
+                    plot_roc,
+                    selected_true,
+                    selected_probabilities,
+                    labels=labels,
+                    class_names=class_names,
+                    title=f"Curva ROC - {name}",
+                )
                 roc_content = (
-                    f'<img src="data:image/png;base64,{roc_base64}" '
+                    f'<img src="data:image/png;base64,{roc_image}" '
                     f'alt="Curva ROC - {name}">'
                 )
             else:
@@ -193,29 +207,19 @@ def generate_report(
                     "para calcular la curva ROC.</p>"
                 )
 
-            with patch("matplotlib.pyplot.show"):
-                plot_confusion_matrix(
-                    selected_true,
-                    selected_pred,
-                    labels=labels,
-                    class_names=class_names,
-                    title=f"Matriz de confusión - {name}",
-                )
-            matrix_figure = plt.gcf()
-            matrix_image = BytesIO()
-            matrix_figure.savefig(
-                matrix_image, format="png", bbox_inches="tight"
-            )
-            plt.close(matrix_figure)
-            matrix_base64 = base64.b64encode(matrix_image.getvalue()).decode(
-                "ascii"
+            matrix_image = _plot_image(
+                plot_confusion_matrix,
+                selected_true,
+                selected_pred,
+                labels=labels,
+                class_names=class_names,
+                title=f"Matriz de confusión - {name}",
             )
             matrix_content = (
-                f'<img src="data:image/png;base64,{matrix_base64}" '
+                f'<img src="data:image/png;base64,{matrix_image}" '
                 f'alt="Matriz de confusión - {name}">'
             )
         else:
-            metrics_content = "<p>No hay muestras para calcular las métricas.</p>"
             roc_content = "<p>No hay muestras para calcular la curva ROC.</p>"
             matrix_content = (
                 "<p>No hay muestras para calcular la matriz de confusión.</p>"
