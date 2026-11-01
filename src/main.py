@@ -4,29 +4,29 @@ from config import (
     CONFIDENCE_THRESHOLD,
     train_patients,
 )
+from utils import process_patient
 from model_utils import (
     binary_data_preparation,
     binary_xgb_definition,
-    binary_xgb_evaluation,
     binary_xgb_fitting,
     data_preparation,
     get_confidence_mask,
     model_combination,
     xgb_definition,
-    xgb_evaluation,
     xgb_fitting,
 )
-from utils import process_patient
 from report import generate_report
 
 
 def main():
-    """Preprocess the recordings and train both classification models.
+    """Run the sleep-stage classification pipeline and create its report.
 
     Patient recordings are preprocessed first, then split by patient ID into
-    training and test sets. The multiclass and binary models are fitted on the
-    consensus labels and evaluated on the test epochs.
+    training and test sets. The multiclass and binary models are fitted
+    separately, their predictions are combined, and the final HTML report
+    summarizes model performance with and without confidence filtering.
     """
+    # Preprocess each patient and collect features with both annotators' labels.
     data_list = []
     for patient_id in range(1, 11):
         print(f"Processing patient {patient_id}...")
@@ -48,17 +48,16 @@ def main():
 
     print(f"\nProcessing complete. Patients loaded: {len(data_list)}")
 
+    # Keep only epochs where annotators agree and split patients into train/test.
     X_train, X_test, y_train, y_test, y_train_original, y_test_original = data_preparation(
         data_list, train_patients=train_patients
     )
-    print(f"Training samples: {len(X_train)} | Test samples: {len(X_test)}")
 
+    # Fit the four-class model and retain its test predictions and probabilities.
     grid_search = xgb_definition()
     calibrated_model = xgb_fitting(X_train, y_train, grid_search)
     multiclass_predictions = calibrated_model.predict(X_test)
-    print(f"Predicted multiclass labels: {len(multiclass_predictions)}")
-
-    xgb_evaluation(calibrated_model, X_test, y_test)
+    multiclass_probabilities = calibrated_model.predict_proba(X_test)
 
     # Train a second model to distinguish N1 from N2 within the light-sleep class.
     X_train_bin, y_train_bin, X_test_bin, y_test_bin = binary_data_preparation(
@@ -73,13 +72,7 @@ def main():
 
     binary_predictions = (binary_probabilities[:, 1] > binary_threshold).astype(int)
 
-    binary_xgb_evaluation(
-        calibrated_model_bin,
-        X_test_bin,
-        y_test_bin,
-        threshold=binary_threshold,
-    )
-
+    # Combine both models into five sleep stages and mark confident predictions.
     combined_predictions, combined_probabilities, _ = model_combination(
         X_test,
         calibrated_model,
@@ -93,6 +86,7 @@ def main():
         f"{confidence_mask.sum()} / {len(confidence_mask)}"
     )
 
+    # Generate a report using test results and the patient-level split details.
     generate_report(
         y_true_multiclass=y_test,
         y_pred_multiclass=multiclass_predictions,

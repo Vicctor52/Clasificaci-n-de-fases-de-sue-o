@@ -120,6 +120,20 @@ def generate_report(
     Returns:
         The path to the generated HTML report.
     """
+    multiclass_names = ["Wake", "N1, N2", "N3", "REM"]
+    multiclass_labels = [0, 1, 2, 3]
+    binary_names = ["N1", "N2"]
+    binary_labels = [0, 1]
+    combined_names = ["Wake", "N1", "N2", "N3", "REM"]
+    combined_labels = [0, 1, 2, 3, 4]
+
+    confidence_mask = np.asarray(confidence_mask, dtype=bool)
+    accepted_count = int(confidence_mask.sum())
+    total_count = len(confidence_mask)
+    y_true_combined = np.asarray(y_true_combined)
+    y_pred_combined = np.asarray(y_pred_combined)
+    probabilities_combined = np.asarray(probabilities_combined)
+
     sections = [
         (
             "Modelo multiclase",
@@ -129,8 +143,8 @@ def generate_report(
             y_true_multiclass,
             y_pred_multiclass,
             probabilities_multiclass,
-            [0, 1, 2, 3],
-            ["Wake", "N1, N2", "N3", "REM"],
+            multiclass_labels,
+            multiclass_names,
             None,
         ),
         (
@@ -140,8 +154,8 @@ def generate_report(
             y_true_binary,
             y_pred_binary,
             probabilities_binary,
-            [0, 1],
-            ["N1", "N2"],
+            binary_labels,
+            binary_names,
             None,
         ),
         (
@@ -151,13 +165,27 @@ def generate_report(
             y_true_combined,
             y_pred_combined,
             probabilities_combined,
-            [0, 1, 2, 3, 4],
-            ["Wake", "N1", "N2", "N3", "REM"],
+            combined_labels,
+            combined_names,
             None,
+        ),
+        (
+            "Modelo combinado - Filtrado por confianza",
+            f"Evalúa únicamente las predicciones que superan el umbral de "
+            f"confianza {confidence_threshold:.2f}: {accepted_count}/{total_count} "
+            f"muestras ({accepted_count / total_count:.1%} de cobertura). "
+            "Tanto la ROC como la matriz usan este mismo subconjunto.",
+            y_true_combined,
+            y_pred_combined,
+            probabilities_combined,
+            combined_labels,
+            combined_names,
+            confidence_mask,
         ),
     ]
 
     report_sections = []
+    combined_section_open = False
     for (
         name,
         description,
@@ -225,10 +253,26 @@ def generate_report(
                 "<p>No hay muestras para calcular la matriz de confusión.</p>"
             )
 
+        is_combined = name.startswith("Modelo combinado - ")
+        if is_combined:
+            if not combined_section_open:
+                report_sections.append(
+                    '<section><h2>Modelo combinado</h2>'
+                )
+                combined_section_open = True
+            subsection_name = name.removeprefix("Modelo combinado - ")
+            section_open = '<div class="subsection">'
+            section_heading = f"<h3>{subsection_name}</h3>"
+            section_close = "</div>"
+        else:
+            section_open = "<section>"
+            section_heading = f"<h2>{name}</h2>"
+            section_close = "</section>"
+
         report_sections.append(
             f"""
-            <section>
-              <h2>{name}</h2>
+            {section_open}
+              {section_heading}
               <p>{description}</p>
               <h4>Resumen de métricas</h4>
               {metrics_content}
@@ -242,11 +286,13 @@ def generate_report(
                   <figcaption>Matriz de confusión</figcaption>
                 </figure>
               </div>
-            </section>
+            {section_close}
             """
         )
 
-    total_count = len(np.asarray(confidence_mask))
+    if combined_section_open:
+        report_sections.append("</section>")
+
     html = f"""<!doctype html>
 <html lang="es">
 <head>
@@ -257,6 +303,8 @@ def generate_report(
     body {{ font-family: Arial, sans-serif; line-height: 1.5; margin: 2rem auto; max-width: 1200px; padding: 0 1rem; color: #222; }}
     h1, h2 {{ color: #17365d; }}
     section {{ border-top: 1px solid #ddd; margin-top: 2rem; padding-top: 1rem; }}
+    .subsection {{ border-top: 1px solid #eee; margin-top: 1.5rem; padding-top: 1rem; }}
+    h3 {{ color: #345; }}
     .plots {{ display: flex; flex-wrap: wrap; gap: 1rem; }}
     figure {{ flex: 1 1 420px; margin: 0; }}
     img {{ height: auto; max-width: 100%; }}
@@ -282,7 +330,9 @@ def generate_report(
       <li>Umbral de detección de artefactos: {artifact_threshold} × desviación estándar de la señal.</li>
       <li>Épocas evaluadas: {len(y_true_multiclass)} en el modelo multiclase,
       {len(y_true_binary)} en el modelo binario y {total_count} en el combinado.</li>
-      <li>Umbral de confianza del combinado: {confidence_threshold:.2f}.</li>
+      <li>Umbral de confianza del combinado: {confidence_threshold:.2f};
+      se aceptaron {accepted_count} de {total_count} épocas
+      ({accepted_count / total_count:.1%} de cobertura).</li>
     </ul>
   </section>
   {''.join(report_sections)}
