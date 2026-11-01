@@ -62,7 +62,8 @@ class ReportGenerationTests(unittest.TestCase):
         for heading in (
             "Modelo multiclase",
             "Modelo binario",
-            "Modelo combinado - Sin filtrar",
+            "Sin filtrar",
+            "Filtrado por confianza",
         ):
             self.assertIn(heading, self.html)
 
@@ -71,8 +72,8 @@ class ReportGenerationTests(unittest.TestCase):
         self.assertIn("Precisión", self.html)
 
     def test_embeds_roc_and_confusion_matrix_images(self):
-        self.assertGreaterEqual(
-            self.html.count("data:image/png;base64,"), 6
+        self.assertEqual(
+            self.html.count("data:image/png;base64,"), 8
         )
         self.assertIn("Curva ROC", self.html)
         self.assertIn("Matriz de confusión", self.html)
@@ -84,6 +85,7 @@ class ReportGenerationTests(unittest.TestCase):
         self.assertIn("Pacientes de prueba: 8, 9, 10", self.html)
         self.assertIn("Umbral de detección de artefactos: 60", self.html)
         self.assertIn("Umbral de confianza del combinado: 0.95", self.html)
+        self.assertIn("cobertura", self.html)
 
 
 if __name__ == "__main__":
