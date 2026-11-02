@@ -1,10 +1,81 @@
 # Clasificación de fases del sueño
 
+> **Resumen**
+>
+> - **Objetivo:** Clasificar cinco fases del sueño (Wake, N1, N2, N3 y REM) a partir de señales PSG.
+> - **Enfoque:** Combinar modelos XGBoost multiclase y binario (para N1/N2), usando extracción de características con YASA.
+> - **Datos:** ISRUC-Sleep Cohort III (10 participantes sanos).
+> - **Resultado principal:** **96,1 % de exactitud** en las predicciones aceptadas por el filtro (umbral de confianza > 0,95).
+
 Este proyecto entrena una combinación de modelos para clasificar automáticamente las fases del sueño a partir de señales de polisomnografía (PSG). La señal se divide en fragmentos de 30 segundos, llamados épocas, y se extraen características de cada época para entrenar los modelos.
 
 Las anotaciones de dos expertos se utilizan como referencia para entrenar y evaluar el sistema. Dos modelos XGBoost se combinan para predecir cinco clases: Wake, N1, N2, N3 y REM.
 
 Este proyecto es un ejercicio académico de procesamiento de señales y aprendizaje automático. No es un dispositivo médico ni ha sido validado para uso clínico, por lo que sus resultados no deben utilizarse para diagnosticar ni tomar decisiones médicas.
+
+## Resultados
+
+Esta sección presenta el rendimiento del **modelo final**, que combina el clasificador multiclase (Wake, N1/N2, N3, REM) con el clasificador binario (N1 vs N2) para obtener las cinco fases del sueño. Se muestran los resultados del modelo combinado primero sin filtrado de confianza y luego con el filtro activado.
+
+### Sin filtrado de confianza
+
+A continuación se presentan las métricas del modelo combinado sobre todas las épocas de prueba, sin aplicar ningún umbral de confianza.
+
+**Resumen de métricas**
+
+| Épocas | Exactitud | Macro-F1 | AUC |
+|----------|-----------|----------|-----|
+| 2657 | 0.823 | 0.826 | 0.966 |
+
+**Métricas por clase**
+
+| Clase | Precisión | Recall | F1 | Épocas |
+|-------|-----------|--------|----|----------|
+| Wake | 0.896 | 0.891 | 0.893 | 612 |
+| N1 | 0.690 | 0.631 | 0.659 | 493 |
+| N2 | 0.769 | 0.817 | 0.793 | 727 |
+| N3 | 0.943 | 0.868 | 0.904 | 478 |
+| REM | 0.834 | 0.928 | 0.879 | 347 |
+z
+**Curva ROC** — muestra la capacidad de discriminación de cada clase frente al resto. El valor AUC de 0.966 indica una buena separación global entre fases.
+
+<img src="images/ROC_noFilter.png" alt="Curva ROC sin filtro" width="570">
+
+**Matriz de confusión** — compara las etiquetas reales con las predicciones finales para las cinco fases. Se observa que la confusión principal ocurre entre N1 y N2, las fases de sueño ligero que son más difíciles de distinguir.
+
+![Matriz de confusión sin filtro](images/matriz_noFilter.png)
+
+### Con filtrado de confianza
+
+El **filtro de confianza** conserva únicamente las predicciones cuya probabilidad máxima supera el umbral `CONFIDENCE_THRESHOLD` (definido en `src/config.py`, valor actual 0.95). De esta forma se descartan las predicciones más inciertas, quedando solo aquellas en las que el modelo está más seguro.
+
+**Resumen de métricas (filtrado)**
+
+| Épocas | Exactitud | Macro-F1 | AUC | Cobertura |
+|----------|-----------|----------|-----|-----------|
+| 1336 | 0.961 | 0.935 | 0.982 | 50.3 % |
+
+De las 2657 épocas totales, se aceptaron 1336 (50.3 % de cobertura).
+
+**Métricas por clase (filtrado)**
+
+| Clase | Precisión | Recall | F1 | Épocas |
+|-------|-----------|--------|----|----------|
+| Wake | 0.988 | 0.990 | 0.989 | 399 |
+| N1 | 0.928 | 0.667 | 0.776 | 96 |
+| N2 | 0.899 | 0.972 | 0.934 | 321 |
+| N3 | 0.986 | 0.980 | 0.983 | 355 |
+| REM | 0.988 | 1.000 | 0.994 | 165 |
+
+**Curva ROC** — calculada sobre el subconjunto de predicciones aceptadas por el filtro de confianza.
+
+<img src="images/ROC_filter.png" alt="Curva ROC con filtro" width="570">
+
+**Matriz de confusión** — construida únicamente con las predicciones cuya confianza supera el umbral.
+
+![Matriz de confusión con filtro](images/matriz_filter.png)
+
+Al aplicar el filtro de confianza se favorece la **precisión** a costa de perder **recall**. Esto se observa claramente en la clase **N1**, que es la que genera más dudas al modelo: su precisión sube de 0.690 a 0.928, pero su recall cae de 0.631 a 0.667 y el número de ejemplos evaluados se reduce drásticamente (de 493 a 96), ya que muchas épocas de N1 son descartadas por no alcanzar el umbral de confianza.
 
 ## Origen de los datos
 
@@ -98,7 +169,7 @@ A las predicciones se les aplica un filtro de confianza que conserva aquellas cu
 ## Estructura de archivos
 
 ```text
-fases_de_sueño/
+Sleep Stages Clasification/
 ├── README.md                        # Documentación del proyecto
 ├── requirements.txt                 # Dependencias de Python
 ├── main_notebook.ipynb              # Ejecución interactiva del flujo
@@ -114,73 +185,9 @@ fases_de_sueño/
     └── utils.py                     # Carga y preprocesamiento de señales
 ```
 
-## Resultados
-
-Esta sección presenta el rendimiento del **modelo final**, que combina el clasificador multiclase (Wake, N1/N2, N3, REM) con el clasificador binario (N1 vs N2) para obtener las cinco fases del sueño. Se muestran los resultados del modelo combinado primero sin filtrado de confianza y luego con el filtro activado.
-
-### Sin filtrado de confianza
-
-A continuación se presentan las métricas del modelo combinado sobre todas las épocas de prueba, sin aplicar ningún umbral de confianza.
-
-**Resumen de métricas**
-
-| Muestras | Exactitud | Macro-F1 | AUC |
-|----------|-----------|----------|-----|
-| 2657 | 0.823 | 0.826 | 0.966 |
-
-**Métricas por clase**
-
-| Clase | Precisión | Recall | F1 | Ejemplos |
-|-------|-----------|--------|----|----------|
-| Wake | 0.896 | 0.891 | 0.893 | 612 |
-| N1 | 0.690 | 0.631 | 0.659 | 493 |
-| N2 | 0.769 | 0.817 | 0.793 | 727 |
-| N3 | 0.943 | 0.868 | 0.904 | 478 |
-| REM | 0.834 | 0.928 | 0.879 | 347 |
-
-**Curva ROC** — muestra la capacidad de discriminación de cada clase frente al resto. El valor AUC de 0.966 indica una buena separación global entre fases.
-
-<img src="images/ROC_noFilter.png" alt="Curva ROC sin filtro" width="570">
-
-**Matriz de confusión** — compara las etiquetas reales con las predicciones finales para las cinco fases. Se observa que la confusión principal ocurre entre N1 y N2, las fases de sueño ligero que son más difíciles de distinguir.
-
-![Matriz de confusión sin filtro](images/matriz_noFilter.png)
-
-### Con filtrado de confianza
-
-El **filtro de confianza** conserva únicamente las predicciones cuya probabilidad máxima supera el umbral `CONFIDENCE_THRESHOLD` (definido en `src/config.py`, valor actual 0.95). De esta forma se descartan las predicciones más inciertas, quedando solo aquellas en las que el modelo está más seguro.
-
-**Resumen de métricas (filtrado)**
-
-| Muestras | Exactitud | Macro-F1 | AUC | Cobertura |
-|----------|-----------|----------|-----|-----------|
-| 1336 | 0.961 | 0.935 | 0.982 | 50.3 % |
-
-De las 2657 épocas totales, se aceptaron 1336 (50.3 % de cobertura).
-
-**Métricas por clase (filtrado)**
-
-| Clase | Precisión | Recall | F1 | Ejemplos |
-|-------|-----------|--------|----|----------|
-| Wake | 0.988 | 0.990 | 0.989 | 399 |
-| N1 | 0.928 | 0.667 | 0.776 | 96 |
-| N2 | 0.899 | 0.972 | 0.934 | 321 |
-| N3 | 0.986 | 0.980 | 0.983 | 355 |
-| REM | 0.988 | 1.000 | 0.994 | 165 |
-
-**Curva ROC** — calculada sobre el subconjunto de predicciones aceptadas por el filtro de confianza.
-
-<img src="images/ROC_filter.png" alt="Curva ROC con filtro" width="570">
-
-**Matriz de confusión** — construida únicamente con las predicciones cuya confianza supera el umbral.
-
-![Matriz de confusión con filtro](images/matriz_filter.png)
-
-Al aplicar el filtro de confianza se favorece la **precisión** a costa de perder **recall**. Esto se observa claramente en la clase **N1**, que es la que genera más dudas al modelo: su precisión sube de 0.690 a 0.928, pero su recall cae de 0.631 a 0.667 y el número de ejemplos evaluados se reduce drásticamente (de 493 a 96), ya que muchas épocas de N1 son descartadas por no alcanzar el umbral de confianza.
-
 ## Ejecución
 
-Una vez preparada la carpeta `data/`, ejecuta estos comandos desde la raíz de `fases_de_sueño/`:
+Una vez preparada la carpeta `data/`, ejecuta estos comandos desde la raíz de `Sleep Stages Clasification/`:
 
 ```powershell
 python -m pip install -r requirements.txt

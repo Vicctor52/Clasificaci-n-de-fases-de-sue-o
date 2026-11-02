@@ -1,10 +1,81 @@
 # Sleep Stage Classification
 
+> **Overview**
+>
+> - **Goal:** Classify five sleep stages (Wake, N1, N2, N3, REM) from PSG signals.
+> - **Approach:** Combine XGBoost multiclass and binary models (for N1/N2), using YASA feature extraction.
+> - **Dataset:** ISRUC-Sleep Cohort III (10 healthy participants).
+> - **Key result:** **96.1% accuracy** on confident predictions (confidence threshold > 0.95).
+
 This project trains a combination of models to automatically classify sleep stages from polysomnography (PSG) signals. The signal is divided into 30-second segments, called epochs, and features are extracted from each epoch to train the models.
 
 Annotations from two experts are used as ground truth for training and evaluating the system. Two XGBoost models are combined to predict five classes: Wake, N1, N2, N3, and REM.
 
 This project is an academic exercise in signal processing and machine learning. It is not a medical device and has not been validated for clinical use. Its results must not be used to diagnose conditions or make medical decisions.
+
+## Results
+
+This section presents the performance of the **final model**, which combines the multiclass classifier (Wake, N1/N2, N3, REM) with the binary classifier (N1 vs. N2) to predict all five sleep stages. Results for the combined model are shown first without confidence filtering and then with the filter enabled.
+
+### Without confidence filtering
+
+The following metrics show the combined model's performance across all test epochs, without applying a confidence threshold.
+
+**Metric summary**
+
+| Epochs | Accuracy | Macro-F1 | AUC |
+|---------|----------|----------|-----|
+| 2657 | 0.823 | 0.826 | 0.966 |
+
+**Per-class metrics**
+
+| Class | Precision | Recall | F1 | Epochs |
+|-------|-----------|--------|----|---------|
+| Wake | 0.896 | 0.891 | 0.893 | 612 |
+| N1 | 0.690 | 0.631 | 0.659 | 493 |
+| N2 | 0.769 | 0.817 | 0.793 | 727 |
+| N3 | 0.943 | 0.868 | 0.904 | 478 |
+| REM | 0.834 | 0.928 | 0.879 | 347 |
+
+**ROC curve** — shows how well each class is distinguished from the others. The AUC of 0.966 indicates good overall separation between sleep stages.
+
+<img src="images/ROC_noFilter.png" alt="ROC curve without confidence filtering" width="570">
+
+**Confusion matrix** — compares the true labels with the final predictions for all five sleep stages. The main confusion occurs between N1 and N2, the light-sleep stages that are more difficult to distinguish.
+
+![Confusion matrix without confidence filtering](images/matriz_noFilter.png)
+
+### With confidence filtering
+
+The **confidence filter** keeps only predictions whose maximum probability exceeds the `CONFIDENCE_THRESHOLD` value defined in `src/config.py` (currently 0.95). This removes the most uncertain predictions, leaving only those in which the model has higher confidence.
+
+**Metric summary (filtered)**
+
+| Epochs | Accuracy | Macro-F1 | AUC | Coverage |
+|---------|----------|----------|-----|----------|
+| 1336 | 0.961 | 0.935 | 0.982 | 50.3% |
+
+Of the 2657 total epochs, 1336 were accepted (50.3% coverage).
+
+**Per-class metrics (filtered)**
+
+| Class | Precision | Recall | F1 | Epochs |
+|-------|-----------|--------|----|---------|
+| Wake | 0.988 | 0.990 | 0.989 | 399 |
+| N1 | 0.928 | 0.667 | 0.776 | 96 |
+| N2 | 0.899 | 0.972 | 0.934 | 321 |
+| N3 | 0.986 | 0.980 | 0.983 | 355 |
+| REM | 0.988 | 1.000 | 0.994 | 165 |
+
+**ROC curve** — calculated using only the predictions accepted by the confidence filter.
+
+<img src="images/ROC_filter.png" alt="ROC curve with confidence filtering" width="570">
+
+**Confusion matrix** — built using only predictions whose confidence exceeds the threshold.
+
+![Confusion matrix with confidence filtering](images/matriz_filter.png)
+
+Applying the confidence filter favors **precision** at the cost of **recall**. This is especially clear for **N1**, the class the model finds most uncertain: its precision rises from 0.690 to 0.928, while its recall goes from 0.631 to 0.667 and the number of evaluated examples drops sharply (from 493 to 96), because many N1 epochs do not reach the confidence threshold.
 
 ## Data source
 
@@ -99,7 +170,7 @@ At the end of the run, `src/report.py` generates `model_report.html` in English 
 ## File structure
 
 ```text
-fases_de_sueño/
+Sleep Stages Clasification/
 ├── README.md                        # Project documentation in English
 ├── README.es.md                     # Project documentation in Spanish
 ├── requirements.txt                 # Python dependencies
@@ -116,73 +187,9 @@ fases_de_sueño/
     └── utils.py                     # Signal loading and preprocessing
 ```
 
-## Results
-
-This section presents the performance of the **final model**, which combines the multiclass classifier (Wake, N1/N2, N3, REM) with the binary classifier (N1 vs. N2) to predict all five sleep stages. Results for the combined model are shown first without confidence filtering and then with the filter enabled.
-
-### Without confidence filtering
-
-The following metrics show the combined model's performance across all test epochs, without applying a confidence threshold.
-
-**Metric summary**
-
-| Samples | Accuracy | Macro-F1 | AUC |
-|---------|----------|----------|-----|
-| 2657 | 0.823 | 0.826 | 0.966 |
-
-**Per-class metrics**
-
-| Class | Precision | Recall | F1 | Support |
-|-------|-----------|--------|----|---------|
-| Wake | 0.896 | 0.891 | 0.893 | 612 |
-| N1 | 0.690 | 0.631 | 0.659 | 493 |
-| N2 | 0.769 | 0.817 | 0.793 | 727 |
-| N3 | 0.943 | 0.868 | 0.904 | 478 |
-| REM | 0.834 | 0.928 | 0.879 | 347 |
-
-**ROC curve** — shows how well each class is distinguished from the others. The AUC of 0.966 indicates good overall separation between sleep stages.
-
-<img src="images/ROC_noFilter.png" alt="ROC curve without confidence filtering" width="570">
-
-**Confusion matrix** — compares the true labels with the final predictions for all five sleep stages. The main confusion occurs between N1 and N2, the light-sleep stages that are more difficult to distinguish.
-
-![Confusion matrix without confidence filtering](images/matriz_noFilter.png)
-
-### With confidence filtering
-
-The **confidence filter** keeps only predictions whose maximum probability exceeds the `CONFIDENCE_THRESHOLD` value defined in `src/config.py` (currently 0.95). This removes the most uncertain predictions, leaving only those in which the model has higher confidence.
-
-**Metric summary (filtered)**
-
-| Samples | Accuracy | Macro-F1 | AUC | Coverage |
-|---------|----------|----------|-----|----------|
-| 1336 | 0.961 | 0.935 | 0.982 | 50.3% |
-
-Of the 2657 total epochs, 1336 were accepted (50.3% coverage).
-
-**Per-class metrics (filtered)**
-
-| Class | Precision | Recall | F1 | Support |
-|-------|-----------|--------|----|---------|
-| Wake | 0.988 | 0.990 | 0.989 | 399 |
-| N1 | 0.928 | 0.667 | 0.776 | 96 |
-| N2 | 0.899 | 0.972 | 0.934 | 321 |
-| N3 | 0.986 | 0.980 | 0.983 | 355 |
-| REM | 0.988 | 1.000 | 0.994 | 165 |
-
-**ROC curve** — calculated using only the predictions accepted by the confidence filter.
-
-<img src="images/ROC_filter.png" alt="ROC curve with confidence filtering" width="570">
-
-**Confusion matrix** — built using only predictions whose confidence exceeds the threshold.
-
-![Confusion matrix with confidence filtering](images/matriz_filter.png)
-
-Applying the confidence filter favors **precision** at the cost of **recall**. This is especially clear for **N1**, the class the model finds most uncertain: its precision rises from 0.690 to 0.928, while its recall goes from 0.631 to 0.667 and the number of evaluated examples drops sharply (from 493 to 96), because many N1 epochs do not reach the confidence threshold.
-
 ## Running the project
 
-After preparing the `data/` folder, run these commands from the `fases_de_sueño/` project root:
+After preparing the `data/` folder, run these commands from the `Sleep Stages Clasification/` project root:
 
 ```powershell
 python -m pip install -r requirements.txt
