@@ -38,7 +38,7 @@ def _calculate_auc(y_true, probabilities, labels):
 def _metrics_html(y_true, y_pred, probabilities, labels, class_names):
     """Build summary and per-class metric tables."""
     if not len(y_true):
-        return "<p>No hay muestras para calcular las métricas.</p>"
+        return "<p>No samples available to calculate the metrics.</p>"
 
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=labels, zero_division=0
@@ -47,7 +47,7 @@ def _metrics_html(y_true, y_pred, probabilities, labels, class_names):
         y_true, y_pred, labels=labels, average="macro", zero_division=0
     )
     auc_score = _calculate_auc(y_true, probabilities, labels)
-    auc_text = f"{auc_score:.3f}" if auc_score is not None else "No disponible"
+    auc_text = f"{auc_score:.3f}" if auc_score is not None else "Unavailable"
 
     class_rows = "".join(
         f"<tr><td>{name}</td><td>{p:.3f}</td><td>{r:.3f}</td>"
@@ -58,12 +58,12 @@ def _metrics_html(y_true, y_pred, probabilities, labels, class_names):
     )
     return f"""
     <table>
-      <thead><tr><th>Muestras</th><th>Exactitud</th><th>Macro-F1</th><th>AUC</th></tr></thead>
+      <thead><tr><th>Samples</th><th>Accuracy</th><th>Macro-F1</th><th>AUC</th></tr></thead>
       <tbody><tr><td>{len(y_true)}</td><td>{accuracy_score(y_true, y_pred):.3f}</td>
       <td>{macro_f1:.3f}</td><td>{auc_text}</td></tr></tbody>
     </table>
     <table>
-      <thead><tr><th>Clase</th><th>Precisión</th><th>Recall</th><th>F1</th><th>Ejemplos</th></tr></thead>
+      <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
       <tbody>{class_rows}</tbody>
     </table>
     """
@@ -136,10 +136,10 @@ def generate_report(
 
     sections = [
         (
-            "Modelo multiclase",
-            "Clasifica cada época en Wake, N1/N2, N3 o REM. La ROC muestra "
-            "el rendimiento de cada clase frente al resto; la matriz compara "
-            "las etiquetas reales con las predicciones.",
+            "Multiclass model",
+            "Classifies each epoch as Wake, N1/N2, N3, or REM. The ROC curve "
+            "shows the performance of each class against the rest; the "
+            "confusion matrix compares the true labels with the predictions.",
             y_true_multiclass,
             y_pred_multiclass,
             probabilities_multiclass,
@@ -148,9 +148,10 @@ def generate_report(
             None,
         ),
         (
-            "Modelo binario",
-            "Distingue entre N1 y N2. La curva ROC evalúa los scores de la "
-            "clase positiva y la matriz muestra las predicciones al umbral usado.",
+            "Binary model",
+            "Distinguishes between N1 and N2. The ROC curve evaluates the "
+            "positive-class scores, and the confusion matrix shows predictions "
+            "at the selected threshold.",
             y_true_binary,
             y_pred_binary,
             probabilities_binary,
@@ -159,9 +160,9 @@ def generate_report(
             None,
         ),
         (
-            "Modelo combinado - Sin filtrar",
-            "Combina los modelos multiclase y binario para clasificar las cinco "
-            "fases. Las gráficas incluyen todas las muestras.",
+            "Combined model - Unfiltered",
+            "Combines the multiclass and binary models to classify the five "
+            "sleep stages. The plots include all samples.",
             y_true_combined,
             y_pred_combined,
             probabilities_combined,
@@ -170,11 +171,11 @@ def generate_report(
             None,
         ),
         (
-            "Modelo combinado - Filtrado por confianza",
-            f"Evalúa únicamente las predicciones que superan el umbral de "
-            f"confianza {confidence_threshold:.2f}: {accepted_count}/{total_count} "
-            f"muestras ({accepted_count / total_count:.1%} de cobertura). "
-            "Tanto la ROC como la matriz usan este mismo subconjunto.",
+            "Combined model - Confidence-filtered",
+            f"Evaluates only predictions that exceed the confidence threshold "
+            f"of {confidence_threshold:.2f}: {accepted_count}/{total_count} "
+            f"samples ({accepted_count / total_count:.1%} coverage). Both the "
+            "ROC curve and confusion matrix use this same subset.",
             y_true_combined,
             y_pred_combined,
             probabilities_combined,
@@ -223,16 +224,16 @@ def generate_report(
                     selected_probabilities,
                     labels=labels,
                     class_names=class_names,
-                    title=f"Curva ROC - {name}",
+                    title=f"ROC curve - {name}",
                 )
                 roc_content = (
                     f'<img src="data:image/png;base64,{roc_image}" '
-                    f'alt="Curva ROC - {name}">'
+                    f'alt="ROC curve - {name}">'
                 )
             else:
                 roc_content = (
-                    "<p>No hay clases con positivos y negativos suficientes "
-                    "para calcular la curva ROC.</p>"
+                    "<p>No classes have enough positive and negative samples "
+                    "to calculate the ROC curve.</p>"
                 )
 
             matrix_image = _plot_image(
@@ -241,26 +242,24 @@ def generate_report(
                 selected_pred,
                 labels=labels,
                 class_names=class_names,
-                title=f"Matriz de confusión - {name}",
+                title=f"Confusion matrix - {name}",
             )
             matrix_content = (
                 f'<img src="data:image/png;base64,{matrix_image}" '
-                f'alt="Matriz de confusión - {name}">'
+                f'alt="Confusion matrix - {name}">'
             )
         else:
-            roc_content = "<p>No hay muestras para calcular la curva ROC.</p>"
+            roc_content = "<p>No samples available to calculate the ROC curve.</p>"
             matrix_content = (
-                "<p>No hay muestras para calcular la matriz de confusión.</p>"
+                "<p>No samples available to calculate the confusion matrix.</p>"
             )
 
-        is_combined = name.startswith("Modelo combinado - ")
+        is_combined = name.startswith("Combined model - ")
         if is_combined:
             if not combined_section_open:
-                report_sections.append(
-                    '<section><h2>Modelo combinado</h2>'
-                )
+                report_sections.append('<section><h2>Combined model</h2>')
                 combined_section_open = True
-            subsection_name = name.removeprefix("Modelo combinado - ")
+            subsection_name = name.removeprefix("Combined model - ")
             section_open = '<div class="subsection">'
             section_heading = f"<h3>{subsection_name}</h3>"
             section_close = "</div>"
@@ -274,16 +273,16 @@ def generate_report(
             {section_open}
               {section_heading}
               <p>{description}</p>
-              <h4>Resumen de métricas</h4>
+              <h4>Metric summary</h4>
               {metrics_content}
               <div class="plots">
                 <figure>
                 {roc_content}
-                  <figcaption>Curva ROC</figcaption>
+                  <figcaption>ROC curve</figcaption>
                 </figure>
                 <figure>
                   {matrix_content}
-                  <figcaption>Matriz de confusión</figcaption>
+                  <figcaption>Confusion matrix</figcaption>
                 </figure>
               </div>
             {section_close}
@@ -294,11 +293,11 @@ def generate_report(
         report_sections.append("</section>")
 
     html = f"""<!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Informe de evaluación de modelos</title>
+  <title>Model Evaluation Report</title>
   <style>
     body {{ font-family: Arial, sans-serif; line-height: 1.5; margin: 2rem auto; max-width: 1200px; padding: 0 1rem; color: #222; }}
     h1, h2 {{ color: #17365d; }}
@@ -316,23 +315,23 @@ def generate_report(
   </style>
 </head>
 <body>
-  <h1>Informe de evaluación de modelos</h1>
-  <p>Este informe resume el rendimiento de los modelos de clasificación de fases
-  del sueño mediante curvas ROC y matrices de confusión. La ROC evalúa la
-  capacidad de discriminación a distintos umbrales; la matriz muestra los
-  aciertos y errores para las predicciones finales.</p>
+  <h1>Model Evaluation Report</h1>
+  <p>This report summarizes the performance of the sleep-stage classification
+  models using ROC curves and confusion matrices. The ROC curve evaluates
+  discrimination across thresholds; the matrix shows correct and incorrect
+  final predictions.</p>
   <section>
-    <h2>Resumen del experimento</h2>
+    <h2>Experiment Summary</h2>
     <ul>
-      <li>Pacientes de entrenamiento: {", ".join(map(str, train_patient_ids))}.</li>
-      <li>Pacientes de prueba: {", ".join(map(str, test_patient_ids))}.</li>
-      <li>Se conservan únicamente las épocas en las que coinciden las etiquetas de ambos anotadores.</li>
-      <li>Umbral de detección de artefactos: {artifact_threshold} × desviación estándar de la señal.</li>
-      <li>Épocas evaluadas: {len(y_true_multiclass)} en el modelo multiclase,
-      {len(y_true_binary)} en el modelo binario y {total_count} en el combinado.</li>
-      <li>Umbral de confianza del combinado: {confidence_threshold:.2f};
-      se aceptaron {accepted_count} de {total_count} épocas
-      ({accepted_count / total_count:.1%} de cobertura).</li>
+      <li>Training patients: {", ".join(map(str, train_patient_ids))}.</li>
+      <li>Test patients: {", ".join(map(str, test_patient_ids))}.</li>
+      <li>Only epochs with matching labels from both annotators are retained.</li>
+      <li>Artifact detection threshold: {artifact_threshold} × signal standard deviation.</li>
+      <li>Epochs evaluated: {len(y_true_multiclass)} for the multiclass model,
+      {len(y_true_binary)} for the binary model, and {total_count} for the combined model.</li>
+      <li>Combined-model confidence threshold: {confidence_threshold:.2f};
+      {accepted_count} of {total_count} epochs were accepted
+      ({accepted_count / total_count:.1%} coverage).</li>
     </ul>
   </section>
   {''.join(report_sections)}
@@ -347,5 +346,5 @@ def generate_report(
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(html, encoding="utf-8")
-    print(f"Informe guardado en: {destination.resolve()}")
+    print(f"Report saved to: {destination.resolve()}")
     return destination

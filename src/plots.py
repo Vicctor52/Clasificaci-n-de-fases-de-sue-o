@@ -42,7 +42,7 @@ def plot_roc(y_true, probabilities, labels, class_names=None, title=None, show=T
             fpr,
             tpr,
             lw=2,
-            label=f"Curva ROC de {class_names[class_index]} (AUC = {class_auc:.4f})",
+            label=f"ROC curve for {class_names[class_index]} (AUC = {class_auc:.4f})",
         )
 
     if labels.size > 2 and class_aucs:
@@ -54,13 +54,13 @@ def plot_roc(y_true, probabilities, labels, class_names=None, title=None, show=T
         color="navy",
         lw=2,
         linestyle="--",
-        label="Clasificador aleatorio",
+        label="Random classifier",
     )
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel("Tasa de falsos positivos", fontsize=12)
-    plt.ylabel("Tasa de verdaderos positivos", fontsize=12)
-    plt.title(title or "Curva ROC")
+    plt.xlabel("False positive rate", fontsize=12)
+    plt.ylabel("True positive rate", fontsize=12)
+    plt.title(title or "ROC curve")
     plt.legend(loc="lower right", fontsize=10)
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -92,9 +92,9 @@ def plot_confusion_matrix(
     matrix = confusion_matrix(y_true, y_pred, labels=labels)
     display = ConfusionMatrixDisplay(confusion_matrix=matrix, display_labels=class_names)
     display.plot(cmap="Blues", values_format="d")
-    display.ax_.set_xlabel("Etiqueta predicha")
-    display.ax_.set_ylabel("Etiqueta real")
-    plt.title(title or "Matriz de confusión")
+    display.ax_.set_xlabel("Predicted label")
+    display.ax_.set_ylabel("True label")
+    plt.title(title or "Confusion matrix")
     plt.tight_layout()
     if show:
         plt.show()

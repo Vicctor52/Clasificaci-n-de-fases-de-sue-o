@@ -59,33 +59,35 @@ class ReportGenerationTests(unittest.TestCase):
         self.assertTrue(self.output_path.exists())
 
     def test_includes_the_model_sections_and_metric_tables(self):
+        self.assertIn('<html lang="en">', self.html)
         for heading in (
-            "Modelo multiclase",
-            "Modelo binario",
-            "Sin filtrar",
-            "Filtrado por confianza",
+            "Multiclass model",
+            "Binary model",
+            "Unfiltered",
+            "Confidence-filtered",
         ):
             self.assertIn(heading, self.html)
 
         self.assertIn("Macro-F1", self.html)
-        self.assertIn("Resumen de métricas", self.html)
-        self.assertIn("Precisión", self.html)
+        self.assertIn("Metric summary", self.html)
+        self.assertIn("Precision", self.html)
+        self.assertNotIn("Modelo", self.html)
 
     def test_embeds_roc_and_confusion_matrix_images(self):
         self.assertEqual(
             self.html.count("data:image/png;base64,"), 8
         )
-        self.assertIn("Curva ROC", self.html)
-        self.assertIn("Matriz de confusión", self.html)
+        self.assertIn("ROC curve", self.html)
+        self.assertIn("Confusion matrix", self.html)
 
     def test_includes_split_details_and_thresholds(self):
         self.assertIn(
-            "Pacientes de entrenamiento: 1, 2, 3, 4, 5, 6, 7", self.html
+            "Training patients: 1, 2, 3, 4, 5, 6, 7", self.html
         )
-        self.assertIn("Pacientes de prueba: 8, 9, 10", self.html)
-        self.assertIn("Umbral de detección de artefactos: 60", self.html)
-        self.assertIn("Umbral de confianza del combinado: 0.95", self.html)
-        self.assertIn("cobertura", self.html)
+        self.assertIn("Test patients: 8, 9, 10", self.html)
+        self.assertIn("Artifact detection threshold: 60", self.html)
+        self.assertIn("Combined-model confidence threshold: 0.95", self.html)
+        self.assertIn("coverage", self.html)
 
 
 if __name__ == "__main__":

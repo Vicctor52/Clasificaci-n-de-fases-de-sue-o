@@ -29,6 +29,14 @@ class PlotRocTests(unittest.TestCase):
 
         self.assertIn("N2", class_aucs)
         self.assertAlmostEqual(class_aucs["N2"], 1.0)
+        axis = plt.gca()
+        self.assertEqual(axis.get_xlabel(), "False positive rate")
+        self.assertEqual(axis.get_ylabel(), "True positive rate")
+        self.assertEqual(axis.get_title(), "ROC curve")
+        self.assertIn(
+            "ROC curve for N2 (AUC = 1.0000)",
+            [text.get_text() for text in axis.get_legend().get_texts()],
+        )
 
     def test_multiclass_roc_returns_one_auc_per_class_and_the_macro_average(self):
         y_true = np.array([0, 1, 2, 3, 0, 1, 2, 3])
@@ -77,6 +85,10 @@ class PlotConfusionMatrixTests(unittest.TestCase):
             matrix,
             np.array([[1, 0, 0], [0, 1, 1], [0, 0, 1]]),
         )
+        axis = plt.gca()
+        self.assertEqual(axis.get_xlabel(), "Predicted label")
+        self.assertEqual(axis.get_ylabel(), "True label")
+        self.assertEqual(axis.get_title(), "Confusion matrix")
 
 
 if __name__ == "__main__":
